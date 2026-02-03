@@ -6,6 +6,9 @@ import (
 	"os"
 	"time"
 
+	"golang.org/x/term"
+
+	"github.com/dedene/frontapp-cli/internal/api"
 	"github.com/dedene/frontapp-cli/internal/auth"
 	"github.com/dedene/frontapp-cli/internal/config"
 )
@@ -20,15 +23,34 @@ type AuthCmd struct {
 
 type AuthSetupCmd struct {
 	ClientID     string `arg:"" help:"OAuth client ID"`
-	ClientSecret string `arg:"" help:"OAuth client secret"`
+	ClientSecret string `name:"client-secret" help:"OAuth client secret (for non-interactive use)"`
 	ClientName   string `help:"Client name (default: default)" default:"default" name:"client-name"`
 	RedirectURI  string `help:"OAuth redirect URI" default:"https://localhost:8484/callback"`
 }
 
 func (c *AuthSetupCmd) Run() error {
+	secret := c.ClientSecret
+
+	if secret == "" {
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			fmt.Print("Client Secret: ")
+
+			bytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Println() // newline after hidden input
+
+			if err != nil {
+				return fmt.Errorf("failed to read secret: %w", err)
+			}
+
+			secret = string(bytes)
+		} else {
+			return fmt.Errorf("client secret required: use --client-secret flag or run interactively")
+		}
+	}
+
 	creds := config.OAuthCredentials{
 		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
+		ClientSecret: secret,
 		RedirectURI:  c.RedirectURI,
 	}
 
@@ -68,13 +90,19 @@ func (c *AuthLoginCmd) Run(flags *RootFlags) error {
 		return fmt.Errorf("open keyring: %w", err)
 	}
 
-	// Use email or a placeholder
+	// Use email from flag or try to fetch from /me
 	email := c.Email
 	if email == "" && flags != nil && flags.Account != "" {
 		email = flags.Account
 	}
+
 	if email == "" {
-		email = "user@front.app" // Placeholder; will be updated when we have /me endpoint
+		// Fetch real email from /me endpoint
+		email, err = c.fetchEmail(ctx, refreshToken)
+		if err != nil {
+			// Don't fall back - require user to specify email
+			return fmt.Errorf("could not determine your identity: %w\nUse --email flag to specify your email", err)
+		}
 	}
 
 	tok := auth.Token{
@@ -90,6 +118,57 @@ func (c *AuthLoginCmd) Run(flags *RootFlags) error {
 	fmt.Fprintf(os.Stdout, "Successfully authenticated as %s\n", email)
 
 	return nil
+}
+
+func (c *AuthLoginCmd) fetchEmail(ctx context.Context, refreshToken string) (string, error) {
+	// Create a temporary token source with the refresh token
+	ts := auth.NewRefreshTokenSource(c.ClientName, refreshToken)
+	client := api.NewClient(ts)
+
+	// Try to get account info from /me
+	me, err := client.Me(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	// /me returns account info, not teammate info for OAuth
+	// Use account ID as identifier if no email provided
+	if me.Email != "" {
+		return me.Email, nil
+	}
+
+	// For OAuth tokens, try to find the authenticated user from teammates list
+	teammates, err := client.ListTeammates(ctx)
+	if err != nil {
+		// Fall back to account ID
+		if me.ID != "" {
+			return me.ID, nil
+		}
+
+		return "", fmt.Errorf("could not determine account identity")
+	}
+
+	if len(teammates.Results) == 1 {
+		// Single teammate account - use that email
+		return teammates.Results[0].Email, nil
+	}
+
+	if len(teammates.Results) > 1 {
+		// Multiple teammates - show list and ask user to re-run with --email
+		fmt.Fprintln(os.Stderr, "Multiple teammates found. Please re-run with --email flag:")
+		for _, t := range teammates.Results {
+			fmt.Fprintf(os.Stderr, "  - %s (%s %s)\n", t.Email, t.FirstName, t.LastName)
+		}
+
+		return "", fmt.Errorf("multiple teammates - specify --email")
+	}
+
+	// Fall back to account ID
+	if me.ID != "" {
+		return me.ID, nil
+	}
+
+	return "", fmt.Errorf("could not determine account identity")
 }
 
 type AuthLogoutCmd struct {
@@ -187,7 +266,7 @@ func (c *AuthStatusCmd) Run() error {
 
 	if !exists {
 		fmt.Fprintln(os.Stdout, "Not configured")
-		fmt.Fprintln(os.Stdout, "Run 'frontcli auth setup <client_id> <client_secret>' to configure.")
+		fmt.Fprintln(os.Stdout, "Run 'frontcli auth setup <client_id>' to configure.")
 
 		return nil
 	}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/dedene/frontapp-cli/internal/api"
+	"github.com/dedene/frontapp-cli/internal/auth"
 	"github.com/dedene/frontapp-cli/internal/config"
 )
 
@@ -14,11 +15,20 @@ func getClient(flags *RootFlags) (*api.Client, error) {
 		return nil, err
 	}
 
-	if email == "" {
-		email = "user@front.app" // Default placeholder
+	clientName := flags.Client
+	if clientName == "" {
+		clientName = "default"
 	}
 
-	clientName, err := config.ResolveClientForAccount(email, flags.Client)
+	if email == "" {
+		// Try to get email from stored tokens
+		email, err = auth.GetAuthenticatedEmail(clientName)
+		if err != nil {
+			return nil, &api.AuthError{Err: err}
+		}
+	}
+
+	clientName, err = config.ResolveClientForAccount(email, flags.Client)
 	if err != nil {
 		return nil, err
 	}

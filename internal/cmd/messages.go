@@ -55,6 +55,14 @@ func (c *MsgGetCmd) Run(flags *RootFlags) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "ID:        %s\n", msg.ID)
+
+	// Extract conversation ID from links
+	if convURL := msg.Links.Related["conversation"]; convURL != "" {
+		if idx := strings.LastIndex(convURL, "/"); idx >= 0 {
+			fmt.Fprintf(os.Stdout, "Conv:      %s\n", convURL[idx+1:])
+		}
+	}
+
 	fmt.Fprintf(os.Stdout, "Type:      %s\n", msg.Type)
 	fmt.Fprintf(os.Stdout, "Direction: %s\n", direction)
 

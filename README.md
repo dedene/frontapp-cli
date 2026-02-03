@@ -60,8 +60,10 @@ Before using frontcli, create an OAuth app in Front:
 ### 2. Store OAuth Credentials
 
 ```bash
-frontcli auth setup <client_id> <client_secret>
+frontcli auth setup <client_id>
 ```
+
+The client secret will be prompted securely (hidden input).
 
 ### 3. Authenticate
 
@@ -144,8 +146,11 @@ needed.
 ### Storing Credentials
 
 ```bash
-# Store OAuth credentials (required once)
-frontcli auth setup <client_id> <client_secret>
+# Store OAuth credentials (prompted securely for secret)
+frontcli auth setup <client_id>
+
+# Or for CI/scripts, use the flag:
+# frontcli auth setup <client_id> --client-secret="$FRONT_CLIENT_SECRET"
 
 # Authenticate with Front
 frontcli auth login

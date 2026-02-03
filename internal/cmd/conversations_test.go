@@ -32,7 +32,7 @@ func TestConvSearchEncodesQuery(t *testing.T) {
 	t.Cleanup(func() { newClientFromAuth = old })
 
 	cmd := ConvSearchCmd{Query: "from:me project update", Limit: 10}
-	flags := &RootFlags{JSON: true}
+	flags := &RootFlags{JSON: true, Account: "test@example.com"}
 
 	if err := cmd.Run(flags); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -74,7 +74,7 @@ func TestConvTagSendsTagIDs(t *testing.T) {
 	t.Cleanup(func() { newClientFromAuth = old })
 
 	cmd := ConvTagCmd{ID: "cnv_123", TagID: "tag_abc"}
-	flags := &RootFlags{}
+	flags := &RootFlags{Account: "test@example.com"}
 
 	if err := cmd.Run(flags); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -118,7 +118,7 @@ func TestConvArchiveIDsFromStdin(t *testing.T) {
 	t.Cleanup(func() { os.Stdin = oldStdin })
 
 	cmd := ConvArchiveCmd{IDsFrom: "-"}
-	flags := &RootFlags{}
+	flags := &RootFlags{Account: "test@example.com"}
 
 	if err := cmd.Run(flags); err != nil {
 		t.Fatalf("Run: %v", err)

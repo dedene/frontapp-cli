@@ -33,6 +33,47 @@ func NewTokenSource(client, email string, store Store) *TokenSource {
 	}
 }
 
+// RefreshTokenSource is a simple token source that uses a refresh token directly.
+// Used during initial login before we know the user's email.
+type RefreshTokenSource struct {
+	client       string
+	refreshToken string
+}
+
+// NewRefreshTokenSource creates a token source from a refresh token directly.
+func NewRefreshTokenSource(client, refreshToken string) *RefreshTokenSource {
+	return &RefreshTokenSource{
+		client:       client,
+		refreshToken: refreshToken,
+	}
+}
+
+// Token returns an access token by exchanging the refresh token.
+func (ts *RefreshTokenSource) Token() (*oauth2.Token, error) {
+	creds, err := config.ReadClientCredentials(ts.client)
+	if err != nil {
+		return nil, fmt.Errorf("read credentials: %w", err)
+	}
+
+	cfg := oauth2.Config{
+		ClientID:     creds.ClientID,
+		ClientSecret: creds.ClientSecret,
+		Endpoint:     frontEndpoint,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tok, err := cfg.TokenSource(ctx, &oauth2.Token{
+		RefreshToken: ts.refreshToken,
+	}).Token()
+	if err != nil {
+		return nil, fmt.Errorf("refresh token: %w", err)
+	}
+
+	return tok, nil
+}
+
 // Token returns a valid access token, refreshing if necessary.
 func (ts *TokenSource) Token() (*oauth2.Token, error) {
 	ts.mu.Lock()
