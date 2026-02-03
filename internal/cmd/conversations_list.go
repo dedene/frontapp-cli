@@ -17,10 +17,11 @@ import (
 )
 
 type ConvListCmd struct {
-	Inbox  string `help:"Filter by inbox ID"`
-	Tag    string `help:"Filter by tag ID"`
-	Status string `help:"Filter by status (open, archived, snoozed, trashed)"`
-	Limit  int    `help:"Maximum number of results" default:"25"`
+	Inbox     string `help:"Filter by inbox ID"`
+	Tag       string `help:"Filter by tag ID"`
+	Status    string `help:"Filter by status (open, assigned, unassigned, archived, snoozed, trashed)"`
+	Limit     int    `help:"Maximum number of results" default:"25"`
+	SortOrder string `help:"Sort order (asc, desc)" short:"s" enum:"asc,desc,-" default:"-"`
 }
 
 func (c *ConvListCmd) Run(flags *RootFlags) error {
@@ -37,10 +38,11 @@ func (c *ConvListCmd) Run(flags *RootFlags) error {
 	}
 
 	resp, err := client.ListConversations(ctx, api.ListConversationsOptions{
-		InboxID: c.Inbox,
-		TagID:   c.Tag,
-		Status:  c.Status,
-		Limit:   c.Limit,
+		InboxID:   c.Inbox,
+		TagID:     c.Tag,
+		Statuses:  api.ParseStatus(c.Status),
+		Limit:     c.Limit,
+		SortOrder: c.SortOrder,
 	})
 	if err != nil {
 		fmt.Fprint(os.Stderr, errfmt.Format(err))
@@ -59,10 +61,10 @@ func (c *ConvListCmd) Run(flags *RootFlags) error {
 	}
 
 	tbl := output.NewTableWriter(os.Stdout, mode.Plain)
-	tbl.AddRow("ID", "STATUS", "ASSIGNEE", "SUBJECT", "CREATED")
+	tbl.AddRow("ID", "STATUS", "ASSIGNEE", "SUBJECT", "CREATED", "UPDATED")
 
 	for _, conv := range resp.Results {
-		tbl.AddRow(output.FormatConversation(conv)...)
+		tbl.AddRow(output.FormatConversationWithUpdated(conv)...)
 	}
 
 	return tbl.Flush()
@@ -71,7 +73,8 @@ func (c *ConvListCmd) Run(flags *RootFlags) error {
 type ConvGetCmd struct {
 	ID       string `arg:"" help:"Conversation ID"`
 	Messages bool   `help:"Include messages" short:"m"`
-	Full     bool   `help:"Include full message content (implies -m)"`
+	Comments bool   `help:"Include comments" short:"c"`
+	Full     bool   `help:"Include full content with comments inline (implies -m -c)"`
 	HTML     bool   `help:"Show message body as HTML (with --full)"`
 	Text     bool   `help:"Show message body as plain text (with --full)"`
 }
@@ -96,8 +99,9 @@ func (c *ConvGetCmd) Run(flags *RootFlags) error {
 		return err
 	}
 
-	// --full implies -m
+	// --full implies -m -c
 	showMessages := c.Messages || c.Full
+	showComments := c.Comments || c.Full
 
 	if mode.JSON {
 		result := map[string]any{"conversation": conv}
@@ -109,6 +113,15 @@ func (c *ConvGetCmd) Run(flags *RootFlags) error {
 			}
 
 			result["messages"] = msgs
+		}
+
+		if showComments {
+			comments, err := c.fetchComments(ctx, client)
+			if err != nil {
+				return err
+			}
+
+			result["comments"] = comments
 		}
 
 		return output.WriteJSON(os.Stdout, result)
@@ -134,7 +147,7 @@ func (c *ConvGetCmd) Run(flags *RootFlags) error {
 	fmt.Fprintf(os.Stdout, "Created:  %s\n", output.FormatTimestamp(conv.CreatedAt))
 
 	if c.Full {
-		return c.printFullMessages(ctx, client)
+		return c.printFullTimeline(ctx, client)
 	}
 
 	if c.Messages {
@@ -152,7 +165,51 @@ func (c *ConvGetCmd) Run(flags *RootFlags) error {
 			tbl.AddRow(output.FormatMessage(msg)...)
 		}
 
-		return tbl.Flush()
+		if err := tbl.Flush(); err != nil {
+			return err
+		}
+	}
+
+	if c.Comments {
+		comments, err := c.fetchComments(ctx, client)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintln(os.Stdout, "\nComments:")
+
+		if len(comments) == 0 {
+			fmt.Fprintln(os.Stdout, "No comments found.")
+		} else {
+			tbl := output.NewTableWriter(os.Stdout, mode.Plain)
+			tbl.AddRow("ID", "AUTHOR", "BODY", "DATE")
+
+			for _, comment := range comments {
+				author := "-"
+				if comment.Author != nil {
+					author = comment.Author.Email
+					if author == "" {
+						author = comment.Author.Username
+					}
+				}
+
+				body := comment.Body
+				if len(body) > 50 {
+					body = body[:47] + "..."
+				}
+
+				tbl.AddRow(
+					comment.ID,
+					author,
+					body,
+					output.FormatTimestamp(comment.PostedAt),
+				)
+			}
+
+			if err := tbl.Flush(); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -171,6 +228,15 @@ func (c *ConvGetCmd) fetchMessages(ctx context.Context, client *api.Client) ([]a
 
 	// Fetch full message content
 	return c.fetchFullMessages(ctx, client)
+}
+
+func (c *ConvGetCmd) fetchComments(ctx context.Context, client *api.Client) ([]api.Comment, error) {
+	var resp api.ListResponse[api.Comment]
+	if err := client.Get(ctx, fmt.Sprintf("/conversations/%s/comments?limit=50", c.ID), &resp); err != nil {
+		return nil, err
+	}
+
+	return resp.Results, nil
 }
 
 func (c *ConvGetCmd) fetchFullMessages(ctx context.Context, client *api.Client) ([]api.Message, error) {
@@ -213,31 +279,93 @@ func (c *ConvGetCmd) fetchFullMessages(ctx context.Context, client *api.Client) 
 	return messages, nil
 }
 
-func (c *ConvGetCmd) printFullMessages(ctx context.Context, client *api.Client) error {
-	messages, err := c.fetchFullMessages(ctx, client)
-	if err != nil {
+// timelineItem represents either a message or comment in the timeline.
+type timelineItem struct {
+	timestamp float64
+	message   *api.Message
+	comment   *api.Comment
+}
+
+func (c *ConvGetCmd) printFullTimeline(ctx context.Context, client *api.Client) error {
+	// Fetch messages and comments in parallel
+	var messages []api.Message
+	var comments []api.Comment
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		messages, err = c.fetchFullMessages(ctx, client)
+
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+		comments, err = c.fetchComments(ctx, client)
+
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
 		return err
 	}
 
-	if len(messages) == 0 {
-		fmt.Fprintln(os.Stdout, "\nNo messages.")
+	if len(messages) == 0 && len(comments) == 0 {
+		fmt.Fprintln(os.Stdout, "\nNo messages or comments.")
 
 		return nil
 	}
 
+	// Build timeline
+	var timeline []timelineItem
+	for i := range messages {
+		timeline = append(timeline, timelineItem{
+			timestamp: messages[i].CreatedAt,
+			message:   &messages[i],
+		})
+	}
+
+	for i := range comments {
+		timeline = append(timeline, timelineItem{
+			timestamp: comments[i].PostedAt,
+			comment:   &comments[i],
+		})
+	}
+
+	// Sort by timestamp (chronological order)
+	sortTimeline(timeline)
+
 	fmt.Fprintln(os.Stdout, "\n"+strings.Repeat("─", 60))
 
-	// Print in chronological order (API returns newest first)
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
-		c.printMessage(msg)
+	for i, item := range timeline {
+		if item.message != nil {
+			c.printMessage(*item.message)
+		} else {
+			c.printComment(*item.comment)
+		}
 
-		if i > 0 {
+		if i < len(timeline)-1 {
 			fmt.Fprintln(os.Stdout, strings.Repeat("─", 60))
 		}
 	}
 
 	return nil
+}
+
+func sortTimeline(items []timelineItem) {
+	// Simple insertion sort (stable, works well for small n)
+	for i := 1; i < len(items); i++ {
+		key := items[i]
+		j := i - 1
+
+		for j >= 0 && items[j].timestamp > key.timestamp {
+			items[j+1] = items[j]
+			j--
+		}
+
+		items[j+1] = key
+	}
 }
 
 func (c *ConvGetCmd) printMessage(msg api.Message) {
@@ -257,12 +385,31 @@ func (c *ConvGetCmd) printMessage(msg api.Message) {
 	}
 
 	// Header with message ID
-	fmt.Fprintf(os.Stdout, "%s %s  %s  [%s]\n", dir, from, output.FormatTimestamp(msg.CreatedAt), msg.ID)
+	fmt.Fprintf(os.Stdout, "%s %s  %s  [message:%s]\n", dir, from, output.FormatTimestamp(msg.CreatedAt), msg.ID)
 	fmt.Fprintln(os.Stdout)
 
 	// Body
 	body := c.formatMessageBody(msg)
 	fmt.Fprintln(os.Stdout, body)
+	fmt.Fprintln(os.Stdout)
+}
+
+func (c *ConvGetCmd) printComment(comment api.Comment) {
+	// From
+	from := "-"
+	if comment.Author != nil {
+		from = comment.Author.Email
+		if from == "" {
+			from = comment.Author.Username
+		}
+	}
+
+	// Header with comment ID (# indicates internal comment)
+	fmt.Fprintf(os.Stdout, "# %s  %s  [comment:%s]\n", from, output.FormatTimestamp(comment.PostedAt), comment.ID)
+	fmt.Fprintln(os.Stdout)
+
+	// Body (comments are plain text)
+	fmt.Fprintln(os.Stdout, comment.Body)
 	fmt.Fprintln(os.Stdout)
 }
 
@@ -343,10 +490,10 @@ func (c *ConvSearchCmd) Run(flags *RootFlags) error {
 	}
 
 	tbl := output.NewTableWriter(os.Stdout, mode.Plain)
-	tbl.AddRow("ID", "STATUS", "ASSIGNEE", "SUBJECT", "CREATED")
+	tbl.AddRow("ID", "STATUS", "ASSIGNEE", "SUBJECT", "CREATED", "UPDATED")
 
 	for _, conv := range resp.Results {
-		tbl.AddRow(output.FormatConversation(conv)...)
+		tbl.AddRow(output.FormatConversationWithUpdated(conv)...)
 	}
 
 	return tbl.Flush()

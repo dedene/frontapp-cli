@@ -85,6 +85,38 @@ func FormatConversation(conv api.Conversation) []string {
 	}
 }
 
+// FormatConversationWithUpdated formats a conversation with UPDATED column.
+// Shows waiting_since for snoozed, otherwise shows created_at.
+func FormatConversationWithUpdated(conv api.Conversation) []string {
+	assignee := "-"
+	if conv.Assignee != nil {
+		assignee = conv.Assignee.Email
+		if assignee == "" {
+			assignee = conv.Assignee.Username
+		}
+	}
+
+	subject := conv.Subject
+	if len(subject) > 50 {
+		subject = subject[:47] + "..."
+	}
+
+	// Use waiting_since if available (snooze/activity time), else created_at
+	updated := conv.WaitingSince
+	if updated == 0 {
+		updated = conv.CreatedAt
+	}
+
+	return []string{
+		conv.ID,
+		conv.Status,
+		assignee,
+		subject,
+		FormatTimestamp(conv.CreatedAt),
+		FormatTimestamp(updated),
+	}
+}
+
 // FormatMessage formats a message for table output.
 func FormatMessage(msg api.Message) []string {
 	direction := "OUT"

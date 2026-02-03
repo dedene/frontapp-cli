@@ -207,8 +207,10 @@ frontcli conv list --tag tag_xxx
 
 # Get conversation details
 frontcli conv get cnv_xxx
-frontcli conv get cnv_xxx --messages              # Include message summaries
-frontcli conv get cnv_xxx --full                  # Include full message content (parallel fetch)
+frontcli conv get cnv_xxx -m                      # Include message summaries
+frontcli conv get cnv_xxx -c                      # Include comment summaries
+frontcli conv get cnv_xxx -m -c                   # Both messages and comments
+frontcli conv get cnv_xxx --full                  # Full content with comments inline (timeline)
 frontcli conv get cnv_xxx --full --html           # Show HTML body
 frontcli conv get cnv_xxx --full --text           # Show plain text body
 frontcli conv messages cnv_xxx

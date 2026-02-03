@@ -494,9 +494,24 @@ func (c *Client) GetContact(ctx context.Context, id string) (*Contact, error) {
 type ListConversationsOptions struct {
 	InboxID   string
 	TagID     string
-	Status    string // open, archived, snoozed, trashed
+	Statuses  []string // assigned, unassigned, archived, trashed, snoozed
 	Limit     int
 	PageToken string
+	SortOrder string // asc, desc (default: desc = most recent first)
+}
+
+// ParseStatus converts a user-friendly status to API statuses.
+// "open" expands to ["assigned", "unassigned"].
+func ParseStatus(status string) []string {
+	if status == "" {
+		return nil
+	}
+
+	if status == "open" {
+		return []string{"assigned", "unassigned"}
+	}
+
+	return []string{status}
 }
 
 func (o ListConversationsOptions) Query() string {
@@ -510,8 +525,8 @@ func (o ListConversationsOptions) Query() string {
 		params.Set("q[tag_id]", o.TagID)
 	}
 
-	if o.Status != "" {
-		params.Set("q[statuses][]", o.Status)
+	for _, status := range o.Statuses {
+		params.Add("q[statuses][]", status)
 	}
 
 	if o.Limit > 0 {
@@ -520,6 +535,11 @@ func (o ListConversationsOptions) Query() string {
 
 	if o.PageToken != "" {
 		params.Set("page_token", o.PageToken)
+	}
+
+	if o.SortOrder != "" && o.SortOrder != "-" {
+		params.Set("sort_by", "date")
+		params.Set("sort_order", o.SortOrder)
 	}
 
 	return params.Encode()
