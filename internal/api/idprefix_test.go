@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -74,15 +75,18 @@ func TestValidateIDPrefix(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateIDPrefix(%q, %q) error = %v, wantErr %v",
 					tt.id, tt.expectedPrefix, err, tt.wantErr)
+
 				return
 			}
 
 			if tt.wantErr {
-				wrongTypeErr, ok := err.(*WrongResourceTypeError)
-				if !ok {
+				var wrongTypeErr *WrongResourceTypeError
+				if !errors.As(err, &wrongTypeErr) {
 					t.Errorf("expected WrongResourceTypeError, got %T", err)
+
 					return
 				}
+
 				if wrongTypeErr.ActualType != tt.wantErrType {
 					t.Errorf("WrongResourceTypeError.ActualType = %q, want %q",
 						wrongTypeErr.ActualType, tt.wantErrType)

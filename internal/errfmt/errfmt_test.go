@@ -102,6 +102,7 @@ func TestGetSuggestionForResource(t *testing.T) {
 				if got != "" {
 					t.Errorf("expected empty suggestion, got: %s", got)
 				}
+
 				return
 			}
 
