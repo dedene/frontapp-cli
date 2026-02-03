@@ -15,6 +15,11 @@ func Format(err error) string {
 		return ""
 	}
 
+	var wrongTypeErr *api.WrongResourceTypeError
+	if errors.As(err, &wrongTypeErr) {
+		return formatWrongResourceTypeError(wrongTypeErr)
+	}
+
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {
 		return formatAPIError(apiErr)
@@ -60,6 +65,15 @@ func formatAPIError(err *api.APIError) string {
 
 		if err.Details != "" {
 			sb.WriteString("  " + err.Details + "\n\n")
+		}
+
+		// Check if wrong ID type was used
+		if err.RequestedID != "" && err.ExpectedResource != "" {
+			if hint := getWrongIDTypeHint(err.RequestedID, err.ExpectedResource); hint != "" {
+				sb.WriteString(hint)
+
+				return sb.String()
+			}
 		}
 
 		sb.WriteString("  The resource doesn't exist or you don't have access.\n")
@@ -119,7 +133,63 @@ func formatNotAuthenticatedError() string {
 	sb.WriteString("Error: Not authenticated\n\n")
 	sb.WriteString("  Run 'frontcli auth login' to authenticate with Front.\n\n")
 	sb.WriteString("  If you need to set up OAuth credentials first:\n")
-	sb.WriteString("    frontcli auth setup <client_id> <client_secret>\n")
+	sb.WriteString("    frontcli auth setup <client_id>\n")
 
 	return sb.String()
+}
+
+func formatWrongResourceTypeError(err *api.WrongResourceTypeError) string {
+	var sb strings.Builder
+
+	sb.WriteString("Error: Wrong ID type\n\n")
+	sb.WriteString(fmt.Sprintf("  '%s' is a %s ID, but a %s ID was expected.\n\n", err.ID, err.ActualType, err.ExpectedType))
+
+	// Suggest the correct command based on the actual resource type
+	if suggestion := getSuggestionForResource(err.ActualType, err.ID); suggestion != "" {
+		sb.WriteString(fmt.Sprintf("  Try: %s\n", suggestion))
+	}
+
+	return sb.String()
+}
+
+// getWrongIDTypeHint returns a hint if the ID has a wrong prefix for the expected resource.
+func getWrongIDTypeHint(id, expectedResource string) string {
+	actualType := api.GetResourceType(id)
+	if actualType == "" || actualType == expectedResource {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("  '%s' is a %s ID, but a %s ID was expected.\n\n", id, actualType, expectedResource))
+
+	if suggestion := getSuggestionForResource(actualType, id); suggestion != "" {
+		sb.WriteString(fmt.Sprintf("  Try: %s\n", suggestion))
+	}
+
+	return sb.String()
+}
+
+// getSuggestionForResource returns a CLI command suggestion for accessing a resource.
+func getSuggestionForResource(resourceType, id string) string {
+	switch resourceType {
+	case "conversation":
+		return fmt.Sprintf("frontcli conv get %s", id)
+	case "message":
+		return fmt.Sprintf("frontcli messages get %s", id)
+	case "comment":
+		return fmt.Sprintf("frontcli comments get %s", id)
+	case "contact":
+		return fmt.Sprintf("frontcli contacts get %s", id)
+	case "teammate":
+		return fmt.Sprintf("frontcli teammates get %s", id)
+	case "tag":
+		return fmt.Sprintf("frontcli tags get %s", id)
+	case "inbox":
+		return fmt.Sprintf("frontcli inboxes get %s", id)
+	case "channel":
+		return fmt.Sprintf("frontcli channels get %s", id)
+	default:
+		return ""
+	}
 }

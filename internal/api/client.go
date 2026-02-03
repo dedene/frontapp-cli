@@ -25,6 +25,19 @@ const (
 
 var errWriterRequired = errors.New("writer is required")
 
+// enrichErrorWithContext adds resource context to API errors for better error messages.
+func enrichErrorWithContext(err error, id, expectedResource string) error {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		apiErr.RequestedID = id
+		apiErr.ExpectedResource = expectedResource
+
+		return apiErr
+	}
+
+	return err
+}
+
 // Client is the Front API client.
 type Client struct {
 	baseURL     string
@@ -333,7 +346,7 @@ func (c *Client) ListConversations(ctx context.Context, opts ListConversationsOp
 func (c *Client) GetConversation(ctx context.Context, id string) (*Conversation, error) {
 	var conv Conversation
 	if err := c.Get(ctx, "/conversations/"+id, &conv); err != nil {
-		return nil, err
+		return nil, enrichErrorWithContext(err, id, "conversation")
 	}
 
 	return &conv, nil
@@ -348,7 +361,7 @@ func (c *Client) ListConversationMessages(ctx context.Context, convID string, li
 
 	var resp ListResponse[Message]
 	if err := c.Get(ctx, path, &resp); err != nil {
-		return nil, err
+		return nil, enrichErrorWithContext(err, convID, "conversation")
 	}
 
 	return &resp, nil
@@ -358,7 +371,7 @@ func (c *Client) ListConversationMessages(ctx context.Context, convID string, li
 func (c *Client) GetMessage(ctx context.Context, id string) (*Message, error) {
 	var msg Message
 	if err := c.Get(ctx, "/messages/"+id, &msg); err != nil {
-		return nil, err
+		return nil, enrichErrorWithContext(err, id, "message")
 	}
 
 	return &msg, nil
@@ -378,7 +391,7 @@ func (c *Client) ListInboxes(ctx context.Context) (*ListResponse[Inbox], error) 
 func (c *Client) GetInbox(ctx context.Context, id string) (*Inbox, error) {
 	var inbox Inbox
 	if err := c.Get(ctx, "/inboxes/"+id, &inbox); err != nil {
-		return nil, err
+		return nil, enrichErrorWithContext(err, id, "inbox")
 	}
 
 	return &inbox, nil
@@ -398,7 +411,7 @@ func (c *Client) ListTags(ctx context.Context) (*ListResponse[Tag], error) {
 func (c *Client) GetTag(ctx context.Context, id string) (*Tag, error) {
 	var tag Tag
 	if err := c.Get(ctx, "/tags/"+id, &tag); err != nil {
-		return nil, err
+		return nil, enrichErrorWithContext(err, id, "tag")
 	}
 
 	return &tag, nil
@@ -418,7 +431,7 @@ func (c *Client) ListTeammates(ctx context.Context) (*ListResponse[Teammate], er
 func (c *Client) GetTeammate(ctx context.Context, id string) (*Teammate, error) {
 	var tm Teammate
 	if err := c.Get(ctx, "/teammates/"+id, &tm); err != nil {
-		return nil, err
+		return nil, enrichErrorWithContext(err, id, "teammate")
 	}
 
 	return &tm, nil
@@ -438,7 +451,7 @@ func (c *Client) ListChannels(ctx context.Context) (*ListResponse[Channel], erro
 func (c *Client) GetChannel(ctx context.Context, id string) (*Channel, error) {
 	var ch Channel
 	if err := c.Get(ctx, "/channels/"+id, &ch); err != nil {
-		return nil, err
+		return nil, enrichErrorWithContext(err, id, "channel")
 	}
 
 	return &ch, nil
@@ -484,7 +497,7 @@ func (c *Client) ListContactsPage(ctx context.Context, pageURL string) (*ListRes
 func (c *Client) GetContact(ctx context.Context, id string) (*Contact, error) {
 	var contact Contact
 	if err := c.Get(ctx, "/contacts/"+id, &contact); err != nil {
-		return nil, err
+		return nil, enrichErrorWithContext(err, id, "contact")
 	}
 
 	return &contact, nil

@@ -22,9 +22,11 @@ var (
 )
 
 type APIError struct {
-	StatusCode int
-	Message    string
-	Details    string
+	StatusCode       int
+	Message          string
+	Details          string
+	RequestedID      string // The ID used in the request (for hint generation)
+	ExpectedResource string // Expected resource type (e.g., "conversation")
 }
 
 func (e *APIError) Error() string {
@@ -89,4 +91,15 @@ func (e *RateLimitError) Error() string {
 	}
 
 	return "rate limit exceeded"
+}
+
+// WrongResourceTypeError indicates the user provided an ID of the wrong resource type.
+type WrongResourceTypeError struct {
+	ExpectedType string // e.g., "conversation"
+	ActualType   string // e.g., "message"
+	ID           string // The ID that was provided
+}
+
+func (e *WrongResourceTypeError) Error() string {
+	return fmt.Sprintf("'%s' is a %s ID, but a %s ID was expected", e.ID, e.ActualType, e.ExpectedType)
 }
