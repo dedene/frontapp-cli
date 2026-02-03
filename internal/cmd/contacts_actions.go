@@ -158,11 +158,12 @@ func (c *ContactMergeCmd) Run(flags *RootFlags) error {
 		return err
 	}
 
-	req := map[string]string{
+	req := map[string]any{
+		"contact_ids":       []string{c.Source},
 		"target_contact_id": c.Target,
 	}
 
-	if err := client.Post(ctx, fmt.Sprintf("/contacts/%s/merge", c.Source), req, nil); err != nil {
+	if err := client.Post(ctx, "/contacts/merge", req, nil); err != nil {
 		fmt.Fprint(os.Stderr, errfmt.Format(err))
 
 		return err

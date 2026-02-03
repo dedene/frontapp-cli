@@ -111,7 +111,7 @@ func (c *ContactHandleDeleteCmd) Run(flags *RootFlags) error {
 		return err
 	}
 
-	if err := client.Delete(ctx, fmt.Sprintf("/contacts/handles/%s", c.ID)); err != nil {
+	if err := client.Delete(ctx, fmt.Sprintf("/contact_handles/%s", c.ID)); err != nil {
 		fmt.Fprint(os.Stderr, errfmt.Format(err))
 
 		return err

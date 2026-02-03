@@ -16,7 +16,6 @@ type DraftCmd struct {
 	Get    DraftGetCmd    `cmd:"" help:"Get a draft"`
 	Update DraftUpdateCmd `cmd:"" help:"Update a draft"`
 	Delete DraftDeleteCmd `cmd:"" help:"Delete a draft"`
-	Send   DraftSendCmd   `cmd:"" help:"Send a draft"`
 }
 
 type DraftCreateCmd struct {
@@ -258,39 +257,6 @@ func (c *DraftDeleteCmd) Run(flags *RootFlags) error {
 	}
 
 	fmt.Fprintln(os.Stdout, "Draft deleted")
-
-	return nil
-}
-
-type DraftSendCmd struct {
-	ID string `arg:"" help:"Draft ID to send"`
-}
-
-func (c *DraftSendCmd) Run(flags *RootFlags) error {
-	ctx := context.Background()
-
-	client, err := getClient(flags)
-	if err != nil {
-		return err
-	}
-
-	mode, err := resolveOutputMode(flags)
-	if err != nil {
-		return err
-	}
-
-	var result map[string]any
-	if err := client.Post(ctx, fmt.Sprintf("/drafts/%s/send", c.ID), nil, &result); err != nil {
-		fmt.Fprint(os.Stderr, errfmt.Format(err))
-
-		return err
-	}
-
-	if mode.JSON {
-		return output.WriteJSON(os.Stdout, result)
-	}
-
-	fmt.Fprintln(os.Stdout, "Draft sent successfully")
 
 	return nil
 }

@@ -7,8 +7,8 @@ credential storage built in.
 ## Features
 
 - **Conversations** - list/search/get, messages/comments, archive/open/trash, assign/unassign, snooze, follow, custom fields
-- **Messages** - get, send, reply, forward, attachments + download
-- **Drafts** - create, list, get, update, delete, send
+- **Messages** - get, send, reply, attachments + download
+- **Drafts** - create, list, get, update, delete
 - **Tags** - list/tree, get, create, update, delete, children, convos
 - **Contacts** - list/search/get, handles, notes, convos, create/update/delete/merge
 - **Inboxes** - list/get, convos, channels
@@ -255,9 +255,6 @@ frontcli msg send --channel cha_xxx --to user@example.com --body-file ./message.
 frontcli msg reply cnv_xxx --body "Thanks for reaching out"
 frontcli msg reply cnv_xxx --body-file ./reply.txt
 
-# Forward message
-frontcli msg forward msg_xxx --to forward@example.com
-
 # List attachments
 frontcli msg attachments msg_xxx
 
@@ -285,9 +282,6 @@ frontcli draft update dra_xxx --body "Updated draft" --draft-version 1
 
 # Delete draft
 frontcli draft delete dra_xxx
-
-# Send draft
-frontcli draft send dra_xxx
 ```
 
 ### Tags

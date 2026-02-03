@@ -190,9 +190,9 @@ func (c *ConvSnoozeCmd) Run(flags *RootFlags) error {
 		return fmt.Errorf("either --until or --duration is required")
 	}
 
-	req := map[string]string{"until": until}
+	req := map[string]string{"scheduled_at": until}
 
-	if err := client.Post(ctx, fmt.Sprintf("/conversations/%s/snooze", c.ID), req, nil); err != nil {
+	if err := client.Patch(ctx, fmt.Sprintf("/conversations/%s/reminders", c.ID), req, nil); err != nil {
 		fmt.Fprint(os.Stderr, errfmt.Format(err))
 
 		return err
@@ -215,7 +215,9 @@ func (c *ConvUnsnoozeCmd) Run(flags *RootFlags) error {
 		return err
 	}
 
-	if err := client.Post(ctx, fmt.Sprintf("/conversations/%s/unsnooze", c.ID), nil, nil); err != nil {
+	req := map[string]any{"scheduled_at": nil}
+
+	if err := client.Patch(ctx, fmt.Sprintf("/conversations/%s/reminders", c.ID), req, nil); err != nil {
 		fmt.Fprint(os.Stderr, errfmt.Format(err))
 
 		return err

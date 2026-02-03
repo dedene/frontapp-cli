@@ -16,7 +16,6 @@ type MsgCmd struct {
 	Get         MsgGetCmd         `cmd:"" help:"Get a message"`
 	Send        MsgSendCmd        `cmd:"" help:"Send a new message"`
 	Reply       MsgReplyCmd       `cmd:"" help:"Reply to a conversation"`
-	Forward     MsgForwardCmd     `cmd:"" help:"Forward a message"`
 	Attachments MsgAttachmentsCmd `cmd:"" help:"List message attachments"`
 	Attachment  MsgAttachmentCmd  `cmd:"" help:"Attachment operations"`
 }
@@ -253,60 +252,6 @@ func (c *MsgAttachmentsCmd) Run(flags *RootFlags) error {
 	}
 
 	return tbl.Flush()
-}
-
-type MsgForwardCmd struct {
-	ID       string `arg:"" help:"Message ID to forward"`
-	To       string `required:"" help:"Recipient address"`
-	Body     string `help:"Forward body"`
-	BodyFile string `help:"Read body from file" type:"existingfile"`
-}
-
-func (c *MsgForwardCmd) Run(flags *RootFlags) error {
-	ctx := context.Background()
-
-	client, err := getClient(flags)
-	if err != nil {
-		return err
-	}
-
-	mode, err := resolveOutputMode(flags)
-	if err != nil {
-		return err
-	}
-
-	body := c.Body
-	if c.BodyFile != "" {
-		data, err := os.ReadFile(c.BodyFile)
-		if err != nil {
-			return fmt.Errorf("read body file: %w", err)
-		}
-
-		body = string(data)
-	}
-
-	req := map[string]any{
-		"to": []string{c.To},
-	}
-
-	if strings.TrimSpace(body) != "" {
-		req["body"] = body
-	}
-
-	var result map[string]any
-	if err := client.Post(ctx, fmt.Sprintf("/messages/%s/forward", c.ID), req, &result); err != nil {
-		fmt.Fprint(os.Stderr, errfmt.Format(err))
-
-		return err
-	}
-
-	if mode.JSON {
-		return output.WriteJSON(os.Stdout, result)
-	}
-
-	fmt.Fprintln(os.Stdout, "Message forwarded successfully")
-
-	return nil
 }
 
 type MsgAttachmentCmd struct {
