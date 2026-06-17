@@ -103,7 +103,11 @@ frontcli teammates list
 
 When creating a new app in Front's developer settings, configure these options:
 
-### 1. Redirect URLs
+### 1. Enable OAuth
+
+Navigate to the Features tab, click Add Feature, and select OAuth to enable it.
+
+### 2. Redirect URLs
 
 Click **"Add Redirect URL"** and add:
 
@@ -114,7 +118,7 @@ https://localhost:8484/callback
 This is the callback URL that frontcli uses during the OAuth flow. frontcli runs a local HTTPS
 server with a self-signed certificate to receive the OAuth callback.
 
-### 2. Namespace Access
+### 3. Namespace Access
 
 Select which namespaces your app can access:
 
@@ -126,7 +130,7 @@ Select which namespaces your app can access:
 
 For full access, check all three boxes.
 
-### 3. Resource Permissions
+### 4. Resource Permissions
 
 Select permissions for each resource type. Here are the recommended permissions for full CLI
 functionality:
@@ -150,7 +154,7 @@ functionality:
 **Tip:** Start with Read permissions only if you just want to query data. Add Write/Delete/Send as
 needed.
 
-### 4. Save and Get Credentials
+### 5. Save and Get Credentials
 
 1. Click **Save** at the bottom
 2. Your **Client ID** and **Client Secret** will be generated
