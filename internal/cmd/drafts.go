@@ -257,6 +257,7 @@ func (c *DraftGetCmd) Run(flags *RootFlags) error {
 
 type DraftUpdateCmd struct {
 	ID           string `arg:"" help:"Draft ID"`
+	Channel      string `help:"Channel ID required by Front for some draft updates"`
 	Body         string `help:"New body"`
 	BodyFile     string `help:"Read body from file" type:"existingfile"`
 	Subject      string `help:"New subject"`
@@ -292,6 +293,10 @@ func (c *DraftUpdateCmd) Run(flags *RootFlags) error {
 
 	if body != "" {
 		req["body"] = body
+	}
+
+	if c.Channel != "" {
+		req["channel_id"] = c.Channel
 	}
 
 	if c.Subject != "" {

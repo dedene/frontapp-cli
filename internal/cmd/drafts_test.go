@@ -683,6 +683,55 @@ func TestDraftUpdateSendsStringVersion(t *testing.T) {
 	}
 }
 
+func TestDraftUpdateSendsChannelIDWhenProvided(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	var gotBody map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"id":"msg_draft_123",
+			"type":"email",
+			"is_inbound":false,
+			"draft_mode":"shared",
+			"version":"draft-ver-456",
+			"created_at":1710000000,
+			"body":"updated body",
+			"text":"updated body",
+			"subject":"Updated draft"
+		}`)
+	}))
+	defer srv.Close()
+
+	old := newClientFromAuth
+	newClientFromAuth = func(_, _ string) (*api.Client, error) {
+		return api.NewClientWithBaseURL(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "token"}), srv.URL), nil
+	}
+	t.Cleanup(func() { newClientFromAuth = old })
+
+	cmd := DraftUpdateCmd{
+		ID:           "msg_draft_123",
+		Channel:      "cha_v4x",
+		DraftVersion: "draft-ver-123",
+		Body:         "updated body",
+	}
+	flags := &RootFlags{JSON: true, Account: "test@example.com"}
+
+	if err := cmd.Run(flags); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	channelID, ok := gotBody["channel_id"].(string)
+	if !ok || channelID != "cha_v4x" {
+		t.Fatalf("expected channel_id in request body, got %#v", gotBody["channel_id"])
+	}
+}
+
 func TestDraftUpdateHumanOutputUsesStringVersion(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

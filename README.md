@@ -319,6 +319,7 @@ frontcli drafts get dra_xxx
 
 # Update draft (optimistic locking with version)
 frontcli drafts update dra_xxx --body "Updated draft" --draft-version draft-ver-123
+frontcli drafts update dra_xxx --channel cha_xxx --body-file ./reply.html --draft-version draft-ver-123
 
 # Delete draft
 frontcli drafts delete dra_xxx --draft-version draft-ver-123
